@@ -3,11 +3,27 @@ import puppeteer from 'puppeteer';
 import './loadEnv.mjs';
 import fs, { link } from 'fs'
 import path from 'path'
+import puppeteerExtra from 'puppeteer-extra';
+import userPrefs from 'puppeteer-extra-plugin-user-preferences';
 
 
 //ordre -> i: cours, y: cat, z: content
 
 async function main() {
+
+    puppeteerExtra.use(
+        userPrefs({
+            userPrefs: {
+                download: {
+                    prompt_for_download: false,
+                    open_pdf_in_system_reader: true,
+                },
+                plugins: {
+                    always_open_pdf_externally: true,
+                },
+            },
+        })
+    );
     
     await fs.mkdir('output', (err) => {
         if (err) {
@@ -17,7 +33,7 @@ async function main() {
         }
     });
     // Launch the browser
-    const browser = await puppeteer.launch({headless: "new"});
+    const browser = await puppeteerExtra.launch({headless: false});
 
     // Create a page
     const page = await browser.newPage();
@@ -124,25 +140,25 @@ async function main() {
 
                 
                 
+                let downloadPath = path.resolve(cleanContentPath)
+
+                await page._client().send('Page.setDownloadBehavior', {
+                    behavior: 'allow',
+                    downloadPath: downloadPath,
+                })
 
                 try {
-                    const client = await page.target().createCDPSession()
-
-                    await client.send('Page.setDownloadBehavior', {
-                        behavior: 'allow',
-                        downloadPath: cleanContentPath,
-                    })
-
                     await page.goto(link)
-                    await page.evaluate(()=> 
-                        document.querySelector("#download").click()
-                    )
+                    // await page.evaluate(()=> 
+                    //     document.querySelector("#download").click()
+                    // )
+                    
                     console.log(`${i}.${y}.${z} -> pdf downloaded`)
                     await page.goBack()
 
                 } catch (error){
                     console.log(`${i}.${y}.${z} -> err?`)
-                    console.log(error)
+                    // console.log(error)
                 }
             }
         }
@@ -170,17 +186,28 @@ async function main() {
         if (err) throw err;
     })
 
+    await page.waitForTimeout(3000);
     await browser.close()
     
     console.log('done')
 }
 
-function isLink(str) {
-    // Regular expression for a simple URL pattern
-    var urlPattern = /^(https?|ftp):\/\/[^\s/$.?#].[^\s]*$/i;
-  
-    // Test the string against the regular expression
-    return urlPattern.test(str);
+async function waitFile (filename) {
+    return new Promise(async (resolve, reject) => {
+        if (!fs.existsSync(filename)) {
+            await delay(3000);    
+            await waitFile(filename);
+            resolve();
+        }else{
+          resolve();
+        }
+    })   
+}
+
+function delay(time) {
+    return new Promise(function(resolve) { 
+        setTimeout(resolve, time)
+    });
 }
 
 main();

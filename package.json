@@ -11,6 +11,8 @@
   "dependencies": {
     "dotenv": "^16.3.1",
     "puppeteer": "^21.6.0",
-    "puppeteer-core": "^21.6.0"
+    "puppeteer-core": "^21.6.0",
+    "puppeteer-extra": "^3.3.6",
+    "puppeteer-extra-plugin-user-preferences": "^2.4.1"
   }
 }
