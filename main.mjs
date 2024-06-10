@@ -63,6 +63,7 @@ async function main() {
             categories: []
         }))
     )
+    
 
     for (let i = 0; i < courses.length; i++) {
 
@@ -109,9 +110,11 @@ async function main() {
         courses[i].categories = await page.evaluate(()=>
         Array.from(document.querySelectorAll('.CategorieDocument'), (categoryElement) => ({
             title: categoryElement.querySelector('td.DisDoc_TitreCategorie').innerText.trim(),
-            content: Array.from(categoryElement.querySelectorAll('.divDescriptionDocumentDansListe'), (itemElement) => ({
+            content: Array.from(categoryElement.querySelectorAll('.itemDataGrid'), (itemElement) => ({
                 title: itemElement.querySelector('a.lblTitreDocumentDansListe').innerText.trim(),
-                link: itemElement.querySelector('a.lblTitreDocumentDansListe').href,
+                link: itemElement.querySelector('td.lblDescriptionDocumentDansListe > div.divDescriptionDocumentDansListe > a.lblTitreDocumentDansListe').href,
+                imgSrc: itemElement.querySelector('td.colVoirTelecharger > a > img').src,
+                type: "",
                 desc: itemElement.lastElementChild.innerText.trim(),
                 path: ""
             }))
@@ -125,10 +128,41 @@ async function main() {
             let catPath = await path.join(coursePath, `${y+1}. ${courses[i].categories[y].title}`)
 
             for(let z = 0; z < courses[i].categories[y].content.length; z++) {
+
+                let lastSegment = (courses[i].categories[y].content[z].imgSrc).split('/').pop()
+
+                if (lastSegment == "FicPDF.gif") {
+                    courses[i].categories[y].content[z].type = "pdf"
+                } else if (lastSegment == "FicDOC.gif") {
+                    courses[i].categories[y].content[z].type = "doc"
+                } else if (lastSegment == "FicPPT.gif") {
+                    courses[i].categories[y].content[z].type = "ppt"
+                } else if (lastSegment == "FicXLS.gif") {
+                    courses[i].categories[y].content[z].type = "xls"
+                } else if (lastSegment == "lienExterne_petit.png") {
+                    courses[i].categories[y].content[z].type = "link"
+                } else  if (lastSegment == "youtube_petit.png") { 
+                    courses[i].categories[y].content[z].type = "youtube"
+                } else if (lastSegment == "FicJPG.gif") {
+                    courses[i].categories[y].content[z].type = "jpg"
+                } else if (lastSegment == "FicMP3.gif") {
+                    courses[i].categories[y].content[z].type = "mp3"
+                } else if (lastSegment == "FicMP4.gif") {
+                    courses[i].categories[y].content[z].type = "mp4"
+                } else if (lastSegment == "FicTXT.gif") { 
+                    courses[i].categories[y].content[z].type = "txt"
+                } else if (lastSegment == "FicAuttre.gif") {
+                    courses[i].categories[y].content[z].type = "other"
+                } else {
+                    courses[i].categories[y].content[z].type = "other"
+                }
                 
-                let contentPath = await path.join(catPath, `${z+1}. ${courses[i].categories[y].content[z].title}`)
+                let contentPath = await path.join(catPath, `${z+1}. ${courses[i].categories[y].content[z].title} (${courses[i].categories[y].content[z].type})`)
 
                 let cleanContentPath = await contentPath.replace(/[<>:"|?*]/g, '_').trim().replace(/\.$/, "")
+
+                let cleanContentLinkPath = await path.join(contentPath, 'link.txt')
+                let cleanContentHtmlPath = await path.join(contentPath, 'text.hmtl')
 
                 //ecrit rien d'autre la dedans pr sync
                 await fs.mkdir(cleanContentPath, { recursive: true }, (err) => {
@@ -137,8 +171,6 @@ async function main() {
                 
 
                 let link = courses[i].categories[y].content[z].link
-
-                
                 
                 let downloadPath = path.resolve(cleanContentPath)
 
@@ -150,12 +182,31 @@ async function main() {
 
                 await page.waitForTimeout(1000)
 
+                // if(courses[i].categories[y].content[z].)
+
                 try {
                     await goto(page, link)
-                    // await page.evaluate(()=> 
-                    //     document.querySelector("#download").click()
-                    // )
-                    console.log(`${i}.${y}.${z} -> pdf downloaded`)
+                    
+                    if(courses[i].categories[y].content[z].type == "link" || courses[i].categories[y].content[z].type == "youtube" || courses[i].categories[y].content[z].type == "jpg") {
+
+                        const pages = await browser.pages();
+                        const popup = pages[pages.length - 1];
+                        const url = await popup.url();
+
+                        fs.writeFile(cleanContentLinkPath, `${url}`, (err) => {
+                            if (err) throw err;
+                        })
+                    }
+                    if (courses[i].categories[y].content[z].type == "text") {
+                        const pages = await browser.pages();
+                        const popup = pages[pages.length - 1];
+                        let htmlContent = await popup.content();
+                        fs.writeFile(cleanContentHtmlPath, `${htmlContent}`, (err) => {
+                            if (err) throw err;
+                        })
+                    }
+
+                    console.log(`${i}.${y}.${z} -> ${courses[i].categories[y].content[z].type} downloaded`)
                     await page.waitForTimeout(3000)
                     // await page.goBack()
                     
