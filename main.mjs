@@ -5,6 +5,7 @@ import fs, { link } from 'fs'
 import path from 'path'
 import puppeteerExtra from 'puppeteer-extra';
 import userPrefs from 'puppeteer-extra-plugin-user-preferences';
+import { setTimeout } from "node:timers/promises";
 
 
 //ordre -> i: cours, y: cat, z: content
@@ -180,7 +181,7 @@ async function main() {
                 })
 
 
-                await page.waitForTimeout(1000)
+                await setTimeout(3000)
 
                 // if(courses[i].categories[y].content[z].)
 
@@ -207,7 +208,7 @@ async function main() {
                     }
 
                     console.log(`${i}.${y}.${z} -> ${courses[i].categories[y].content[z].type} downloaded`)
-                    await page.waitForTimeout(3000)
+                    await setTimeout(3000)
                     // await page.goBack()
                     
                 } catch (error){   
@@ -242,7 +243,7 @@ async function main() {
         if (err) throw err;
     })
 
-    await page.waitForTimeout(3000);
+    await setTimeout(3000);
     await browser.close()
     
     console.log('done')
