@@ -38,6 +38,7 @@ async function main() {
 
     // Create a page
     const page = await browser.newPage();
+    page.setDefaultNavigationTimeout(60000); // Increase navigation timeout to 60 seconds
 
     // Go to your site
     await page.goto('https://cvm.omnivox.ca/');
@@ -61,12 +62,14 @@ async function main() {
             title: e.querySelector('.card-panel-title').innerText,
             desc: e.querySelector('.card-panel-desc').innerText,
             link: e.querySelector('div.card-panel-content > a:nth-child(2)').href,
+            linkT: e.querySelector('div.card-panel-content > a:nth-child(3)').href,
+            nT: e.querySelector('div.card-panel-content > a:nth-child(3) > div > div.card-panel-item-content > div > div.right-section > span > span').innerText.trim(),
             categories: []
         }))
     )
     
 
-    for (let i = 0; i < courses.length; i++) {
+    for (let i = 2; i < courses.length; i++) {
 
         // //cree dossier
         // let courseFolderPath = await path.join('output', courses[i].title)
@@ -219,6 +222,108 @@ async function main() {
 
             }
         }
+        console.log(courses[i].nT, courses[i].linkT)
+        await page.goBack()
+        await page.goto(courses[i].linkT)
+        
+        if (courses[i].nT != "0") {
+            await page.waitForSelector('#tabListeTravEtu > tbody > tr')
+            courses[i].travaux = await page.evaluate(()=>
+                Array.from(document.querySelectorAll('#tabListeTravEtu > tbody > tr'))
+                    .filter(travauxElement => travauxElement.querySelector('td:nth-child(2) > a') && travauxElement.querySelector('td:nth-child(3) > span:nth-child(1)'))
+                    .map(travauxElement => ({
+                        title: travauxElement.querySelector('td:nth-child(2) > a').innerText.trim(),
+                        date: travauxElement.querySelector('td:nth-child(3) > span:nth-child(1)').innerText.trim(),
+                        link: `https://cvm-lea.omnivox.ca/cvir/dtrv/${travauxElement.querySelector('td:nth-child(2) > a').onclick.toString().match(/OpenCentre\('([^']+)'/)[1]}`,
+                    }))
+            );
+
+            let tPath = await path.join(coursePath, 'travaux')
+
+            for (let a = 0; a < courses[i].travaux.length; a++) {
+                console.log(courses[i].travaux[a])
+                await page.goto(courses[i].travaux[a].link)
+                await setTimeout(3000)
+
+                courses[i].travaux[a].nomDocLie = await page.evaluate(() => document.querySelector('#lblDocumentLie').innerText.trim())
+                courses[i].travaux[a].linkDocLie = await page.evaluate(() => document.querySelector('#ALienFichierLie2').href)
+
+                let tDocLiePath = await path.join(tPath, `${a+1}. ${courses[i].travaux[a].title}`)
+                let travauxDocLiePath = await path.join(tDocLiePath, 'docLie')
+                let cleanTravauxPath = await travauxDocLiePath.replace(/[<>:"|?*]/g, '_').trim().replace(/\.$/, "")
+
+                let downloadPath = path.resolve(cleanTravauxPath)
+
+                await page._client().send('Page.setDownloadBehavior', {
+                    behavior: 'allow',
+                    downloadPath: downloadPath,
+                })
+
+                await setTimeout(3000)
+
+                try {
+                    await goto(page, courses[i].travaux[a].linkDocLie)
+
+                    console.log(`Travaux Doc Lie ${i}.${a} -> ${courses[i].travaux[a].title} downloaded`)
+                    await setTimeout(3000)
+                    // await page.goBack()
+                    
+                } catch (error){   
+                    // console.log(error)
+                    console.log(`${i}.${y}.${z} -> err?`)
+                    
+                }
+
+                courses[i].travaux[a].docRemis = await page.evaluate(() => 
+                    Array.from(document.querySelectorAll('#formUpload > div.container > ul > li:nth-child(2) > div:nth-child(3) > div:nth-child(2) > a'), (docRemisElement) => ({
+                        link: docRemisElement.href,
+                        title: docRemisElement.innerText.trim(),
+                    }))
+                );
+                
+                courses[i].travaux[a].docRemis = courses[i].travaux[a].docRemis.filter(doc => doc.title !== "");
+
+
+                for (let b = 0; b < courses[i].travaux[a].docRemis.length; b++) {
+                    let travauxDocRemisPath = await path.join(tDocLiePath, `docRemis_${b+1}`)
+                    let cleanTravauxDocRemisPath = await travauxDocRemisPath.replace(/[<>:"|?*]/g, '_').trim().replace(/\.$/, "")
+
+                    await page._client().send('Page.setDownloadBehavior', {
+                        behavior: 'allow',
+                        downloadPath: path.resolve(cleanTravauxDocRemisPath),
+                    })
+
+                    await setTimeout(3000)
+
+                    try {
+                        await goto(page, courses[i].travaux[a].docRemis[b].link)
+
+                        console.log(`Travaux Doc Remis ${i}.${a}.${b} -> ${courses[i].travaux[a].title} downloaded`)
+                        await setTimeout(3000)
+                        
+                    } catch (error){   
+                        // console.log(error)
+                        console.log(`${i}.${y}.${z} -> err?`)
+                        
+                    }
+                }
+                await page.goBack()
+
+                //create info.txt
+                let infoPath = await path.join(tDocLiePath, 'info.txt');
+                fs.mkdir(path.dirname(infoPath), { recursive: true }, (err) => {
+                    if (err) throw err;
+                    fs.writeFile(infoPath, `Date: ${courses[i].travaux[a].date}`, (err) => {
+                        if (err) throw err;
+                    });
+                });
+            }
+        }
+
+
+        await page.goBack()
+
+        
         //create desc.txt
         let cleanCoursePath = await coursePath.replace(/[<>:"|?*]/g, '_').trim().replace(/\.$/, "")
         let cleanCourseDesc = await path.join(cleanCoursePath, 'desc.txt')
@@ -231,7 +336,6 @@ async function main() {
             })
         })
         
-        await page.goBack()
     }
     
     // console.log(courses[1])
